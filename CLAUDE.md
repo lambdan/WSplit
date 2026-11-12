@@ -70,7 +70,7 @@ rendering. Compare against `docs/overview_*.png`.
 | core | Done, 83 tests pass, ASan/UBSan clean |
 | Linux GTK4 | Code complete, screenshot-verified, smoke-tested on macOS GTK. **Not yet tested on Wayland** |
 | macOS | Code complete. Owner ran an early build. CI job has been stuck "queued" (macos-latest); check `gh run list`. Window-drag was "finicky": now moves the window manually in `mouseDragged` (DRAG_MOVE) instead of `performWindowDragWithEvent`. **Ask the owner to confirm the fix.** |
-| Windows | Code complete; cross-compiles warning-free with Homebrew mingw-w64 (`make windows`). **Never run yet** (no Wine here): check the CI `windows-screenshots` artifact and ask the owner to try it |
+| Windows | Code complete; cross-compiles warning-free with Homebrew mingw-w64 (`make windows`). CI build + tests pass and the `--screenshot` renders (all 4 modes) were checked by the owner and match `docs/`. **Interactive app not tried yet** (window, menu, dialogs, hotkeys) |
 | CI | Linux (GTK4, ubuntu-24.04), macOS, Windows (MSYS2 MINGW64) jobs; Linux + Windows render screenshots as a smoke test |
 
 ## In progress / next steps
@@ -102,7 +102,7 @@ How it's built (keep consistent when changing):
   Same update_best / restore_best / close_file + keep path + keep detail size flow as macOS.
 - Icons load via `gdk_texture_new_from_filename` (any gdk-pixbuf format). Ctrl+O/S/E/Q shortcuts.
 
-### 2. Windows front-end (`windows/main.c`): written, never run
+### 2. Windows front-end (`windows/main.c`): rendering verified on CI, interactive use untested
 Win32 + GDI+ flat API in C (mingw-w64's `<gdiplus.h>` works from C; don't define `WIN32_LEAN_AND_MEAN`, it breaks it).
 - `WS_POPUP|WS_MINIMIZEBOX|WS_SYSMENU` + `WS_EX_LAYERED` (opacity) + `WS_EX_ACCEPTFILES`. Core units are 96 dpi;
   window pixels = core size * `ui.scale` (from `GetDpiForWindow`, updated on `WM_DPICHANGED`); paint scales the world transform.

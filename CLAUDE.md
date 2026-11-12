@@ -25,7 +25,7 @@ native/
   linux/        GTK 4 front-end (wsplit-gtk.c) + io.github.lambdan.WSplit.desktop
   macos/        AppKit front-end (main.m, Dialogs.m, WSplitMac.h, Info.plist, make_icns.sh)
   windows/      Win32 + GDI+ front-end (main.c, wsplit.rc dialogs, resource.h, manifest, .ico)
-  tests/        test_core.c: 82 core tests (`make test`)
+  tests/        test_core.c: 83 core tests (`make test`)
   assets/       digital-7-mono.ttf (extracted from the original exe), icons/*.png
   docs/         README screenshots
 .github/workflows/native.yml   CI: Linux + macOS builds, release on v* tags
@@ -67,7 +67,7 @@ rendering. Compare against `docs/overview_*.png`.
 
 | Platform | State |
 |---|---|
-| core | Done, 82 tests pass, ASan/UBSan clean |
+| core | Done, 83 tests pass, ASan/UBSan clean |
 | Linux GTK4 | Code complete, screenshot-verified, smoke-tested on macOS GTK. **Not yet tested on Wayland** |
 | macOS | Code complete. Owner ran an early build. CI job has been stuck "queued" (macos-latest); check `gh run list`. Window-drag was "finicky": now moves the window manually in `mouseDragged` (DRAG_MOVE) instead of `performWindowDragWithEvent`. **Ask the owner to confirm the fix.** |
 | Windows | Code complete; cross-compiles warning-free with Homebrew mingw-w64 (`make windows`). **Never run yet** (no Wine here): check the CI `windows-screenshots` artifact and ask the owner to try it |
@@ -119,11 +119,14 @@ Win32 + GDI+ flat API in C (mingw-w64's `<gdiplus.h>` works from C; don't define
 The owner asked whether this should **replace** the C# app: don't delete `WSplit/` without asking.
 
 ### 3. CI
-Add GTK4 Linux + Windows jobs, keep releases on `v*` tags (artifacts: Linux tar.gz, macOS zip of
-an ad-hoc-signed unsigned app (users allow it in Privacy & Security), Windows zip). Read failures with
-`gh run view --log-failed`.
+Done: Linux (GTK4), macOS, Windows jobs; releases on `v*` tags (Linux tar.gz, macOS zip of an ad-hoc-signed
+app (users allow it in Privacy & Security), Windows zip). `gh` isn't installed on the owner's Mac; the public API
+works without auth: `curl -s https://api.github.com/repos/lambdan/WSplit/actions/runs?per_page=3`, then
+`.../runs/<id>/jobs` and `.../check-runs/<job id>/annotations`. Full logs need auth.
+macOS jobs queue for a long time (runner capacity). The macOS unit-test failure at 632a5cc was most likely
+the timing test assuming a 300 ms sleep is exact; fixed to not depend on sleep accuracy.
 
-### 4. Timing write-up (`native/docs/TIMING.md`)
+### 4. Timing write-up: done (`native/docs/TIMING.md`); notes it was based on:
 Measured here:
 - **CLOCK_MONOTONIC:** 1 ns resolution, ~25 ns per read, 0 ppm drift vs CLOCK_REALTIME/RAW over 20 s.
 - **Start delay (fixed):** used to start up to 15 ms late (avg 7.7 ms); now 0.02 ms.

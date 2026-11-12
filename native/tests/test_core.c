@@ -159,9 +159,13 @@ int main(void)
         struct timespec ts = {0, 300000000};    /* 300 ms */
         nanosleep(&ts, NULL);
         ws_app_set_input_latency(&app, 100000000); /* key was pressed 100 ms ago */
+        int64_t pressed = app.input_ns;
         ws_app_timer_control(&app);              /* split */
         double t = app.run.segs[0].live_time;
-        OK(t >= 0.19 && t <= 0.21);              /* ~0.20 s, not ~0.30 s */
+        /* split timed at the key press, not now (CI runners can oversleep,
+           so don't assume the sleep took exactly 300 ms) */
+        EQD(t, trunc((double)(pressed - app.timer.start_ns) / 1e9 * 100.0) / 100.0);
+        OK((double)(ws_now_ns() - app.timer.start_ns) / 1e9 - t >= 0.099);
         OK(app.input_ns == 0);
         ws_app_free(&app);
 

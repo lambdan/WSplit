@@ -1,4 +1,4 @@
-# WSplit — native macOS & Linux port
+# WSplit — native macOS, Linux & Windows port
 
 A native port of **WSplit 1.5.x**, the classic Windows speedrun split timer
 by Wodanaz (SDA), later updated by Nitrofski and contributors.
@@ -11,13 +11,13 @@ This is **not** an emulation layer. It's a rewrite of the original C# logic
 ([github.com/Nitrofski/WSplit](https://github.com/Nitrofski/WSplit)) in portable
 C, with a native front-end on each platform:
 
-| | macOS | Linux |
-|---|---|---|
-| UI | Cocoa / AppKit (Objective-C) | GTK 4 + cairo (Wayland-native) |
-| Global hotkeys | Carbon `RegisterEventHotKey` (no Accessibility permission needed) | xdg-desktop-portal GlobalShortcuts |
-| Fonts | CoreText | cairo + FreeType |
-| Run editor | Native table editor | Built-in text-grid editor |
-| Settings | Settings window + right-click menu | Right-click menu |
+| | macOS | Linux | Windows |
+|---|---|---|---|
+| UI | Cocoa / AppKit (Objective-C) | GTK 4 + cairo (Wayland-native) | Win32 + GDI+ (C) |
+| Global hotkeys | Carbon `RegisterEventHotKey` (no Accessibility permission needed) | xdg-desktop-portal GlobalShortcuts | `RegisterHotKey` |
+| Fonts | CoreText | cairo + FreeType | GDI+ (Digital-7 embedded) |
+| Run editor | Native table editor | Built-in text-grid editor | Built-in text-grid editor |
+| Settings | Settings window + right-click menu | Right-click menu | Right-click menu |
 
 ## What carries over from the original
 
@@ -104,11 +104,27 @@ Hyprland). The first time you set one, your desktop asks you to confirm or chang
 key. Wayland has no way for an app to stay on top or to place its own window,
 so those two options aren't in the Linux menu.
 
+### Windows (10 and 11)
+
+Download `WSplit-windows-x86_64.zip` from the releases, or build it:
+
+```sh
+# MSYS2 MINGW64 shell
+pacman -S make mingw-w64-x86_64-gcc
+make windows WIN_CC=gcc WINDRES=windres
+# or cross-compile from Linux/macOS with mingw-w64 installed:
+make windows
+```
+
+`WSplit.exe` is a single static executable; the clock font is embedded. It is
+DPI-aware per monitor. This is a separate program from the original C# WSplit in
+`WSplit/` and reads the same `.wsplit` files.
+
 ## Where things are stored
 
-| | macOS | Linux |
-|---|---|---|
-| Settings, colours, hotkeys, recent files | `~/Library/Application Support/WSplit/settings.ini` | `~/.config/wsplit/settings.ini` |
+| | macOS | Linux | Windows |
+|---|---|---|---|
+| Settings, colours, hotkeys, recent files | `~/Library/Application Support/WSplit/settings.ini` | `~/.config/wsplit/settings.ini` | `%APPDATA%\WSplit\settings.ini` |
 
 The settings file is plain `key=value` text. Colour schemes can be saved and loaded
 as `.wscolors` files.
@@ -127,6 +143,7 @@ as `.wscolors` files.
 ```
 core/       portable C11: run model, timer, file formats, settings, menu model, renderer
 linux/      GTK 4 front-end (wsplit-gtk.c, .desktop file)
+windows/    Win32 + GDI+ front-end (main.c, wsplit.rc dialogs, manifest, icon)
 macos/      AppKit front-end (main.m, Dialogs.m, Info.plist)
 assets/     Digital-7 Mono clock font, app icons
 tests/      core unit tests (make test)

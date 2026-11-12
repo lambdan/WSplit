@@ -24,7 +24,7 @@ native/
     menu.c      shared context-menu model; front-ends render it natively, ids >= WS_CMD_CORE_BASE run in core
   linux/        GTK 4 front-end (wsplit-gtk.c) + io.github.lambdan.WSplit.desktop
   macos/        AppKit front-end (main.m, Dialogs.m, WSplitMac.h, Info.plist, make_icns.sh)
-  windows/      Win32 + GDI+ front-end: resources only so far (wsplit.rc, resource.h, manifest, .ico)
+  windows/      Win32 + GDI+ front-end (main.c, wsplit.rc dialogs, resource.h, manifest, .ico)
   tests/        test_core.c: 82 core tests (`make test`)
   assets/       digital-7-mono.ttf (extracted from the original exe), icons/*.png
   docs/         README screenshots
@@ -70,8 +70,8 @@ rendering. Compare against `docs/overview_*.png`.
 | core | Done, 82 tests pass, ASan/UBSan clean |
 | Linux GTK4 | Code complete, screenshot-verified, smoke-tested on macOS GTK. **Not yet tested on Wayland** |
 | macOS | Code complete. Owner ran an early build. CI job has been stuck "queued" (macos-latest); check `gh run list`. Window-drag was "finicky": now moves the window manually in `mouseDragged` (DRAG_MOVE) instead of `performWindowDragWithEvent`. **Ask the owner to confirm the fix.** |
-| Windows | Resources/manifest/icon done; `windows/main.c` **not written yet** |
-| CI | Linux job switched to GTK4 on ubuntu-24.04 (+ screenshot smoke test). Needs: Windows (MSYS2 mingw64) |
+| Windows | Code complete; cross-compiles warning-free with Homebrew mingw-w64 (`make windows`). **Never run yet** (no Wine here): check the CI `windows-screenshots` artifact and ask the owner to try it |
+| CI | Linux (GTK4, ubuntu-24.04), macOS, Windows (MSYS2 MINGW64) jobs; Linux + Windows render screenshots as a smoke test |
 
 ## In progress / next steps
 
@@ -102,16 +102,21 @@ How it's built (keep consistent when changing):
   Same update_best / restore_best / close_file + keep path + keep detail size flow as macOS.
 - Icons load via `gdk_texture_new_from_filename` (any gdk-pixbuf format). Ctrl+O/S/E/Q shortcuts.
 
-### 2. Windows front-end (`windows/main.c`, Win32 + GDI+ flat API in C)
-Plan: `WS_POPUP|WS_MINIMIZEBOX|WS_SYSMENU`, double-buffered GDI+ (`GdipCreateFromHDC` on a memory DC),
-`GdipStringFormatGetGenericTypographic` (no padding; the core adds it), `PixelOffsetModeHalf`,
-per-monitor DPI with a world-transform scale. Move = `ReleaseCapture` + `WM_NCLBUTTONDOWN/HTCAPTION`
-(what the original did). `RegisterHotKey` with `MOD_NOREPEAT`. Menus via `TrackPopupMenu(TPM_RETURNCMD)`.
-`MessageBoxW`, `GetOpen/SaveFileNameW`, `ChooseFontW`. Dialogs come from `wsplit.rc` (prompt, hotkey
-with HOTKEY_CLASS, run editor using the text-grid format). Digital-7 from RCDATA via `GdipPrivateAddMemoryFont`.
-Latency from `GetMessageTime()` only if > ~32 ms (tick resolution). Settings: `%APPDATA%\WSplit\settings.ini`.
-Link: `-mwindows -static -lgdiplus -lcomdlg32 -lcomctl32 -lshell32 -lole32`. Build in CI with MSYS2 mingw64; windres run from `native/`.
-Use `WS_MENU_PLATFORM_WINDOWS`. The owner asked whether this should **replace** the C# app: don't delete `WSplit/` without asking.
+### 2. Windows front-end (`windows/main.c`): written, never run
+Win32 + GDI+ flat API in C (mingw-w64's `<gdiplus.h>` works from C; don't define `WIN32_LEAN_AND_MEAN`, it breaks it).
+- `WS_POPUP|WS_MINIMIZEBOX|WS_SYSMENU` + `WS_EX_LAYERED` (opacity) + `WS_EX_ACCEPTFILES`. Core units are 96 dpi;
+  window pixels = core size * `ui.scale` (from `GetDpiForWindow`, updated on `WM_DPICHANGED`); paint scales the world transform.
+- Painter: memory DC + `GdipCreateFromHDC`, generic-typographic string format (+ MeasureTrailingSpaces, NoWrap),
+  `PixelOffsetModeHalf`, font metrics from cell ascent/descent. Icons: GDI+ bitmaps copied to memory; grey via ColorMatrix.
+- Move = `ReleaseCapture` + `WM_NCLBUTTONDOWN/HTCAPTION`. Edge drags use capture + screen coords; left/top edges move the window too.
+- Menu: `TrackPopupMenu(TPM_RETURNCMD)`, `&` escaped, radio items via `MFT_RADIOCHECK`, shortcut after `\t`.
+- Keys: `WM_KEYDOWN`/`WM_SYSKEYDOWN`, bit 30 = repeat. Latency from `GetMessageTime()` only when 32..1000 ms.
+  Hotkeys: `RegisterHotKey` + `MOD_NOREPEAT`, id = action + 1.
+- Dialogs from `wsplit.rc` (prompt, hotkey with `HOTKEY_CLASS`, run editor using the text grid; CRLF conversion
+  for the edit control). `MessageBoxW`, `GetOpen/SaveFileNameW`, `ChooseFontW`. Digital-7 from RCDATA via `GdipPrivateAddMemoryFont`.
+- Settings: `%APPDATA%\WSplit\settings.ini`; remember-position + always-on-top supported (`WS_MENU_PLATFORM_WINDOWS`).
+- `--screenshot/--mode/--simulate` work (PNG via GDI+ encoder); used by CI.
+The owner asked whether this should **replace** the C# app: don't delete `WSplit/` without asking.
 
 ### 3. CI
 Add GTK4 Linux + Windows jobs, keep releases on `v*` tags (artifacts: Linux tar.gz, macOS zip of

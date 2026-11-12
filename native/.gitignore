@@ -2,3 +2,5 @@ wsplit
 tests/test_core
 WSplit.app/
 *.o
+WSplit.exe
+windows/wsplit_res.o

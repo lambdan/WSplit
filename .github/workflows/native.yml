@@ -58,16 +58,55 @@ jobs:
           name: WSplit-macOS
           path: WSplit-macOS.zip
 
+  windows:
+    name: Windows x86_64
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: make mingw-w64-x86_64-gcc zip
+      - name: Build
+        run: make -C native windows WIN_CC=gcc WINDRES=windres
+      - name: Unit tests
+        run: make -C native test CC=gcc
+      - name: Screenshot smoke test
+        run: |
+          mkdir -p shots
+          for m in 0 1 2 3; do
+            ./native/WSplit.exe --screenshot shots/mode$m.png --mode $m --simulate 4 native/examples/sm64_16star.wsplit
+            test -s shots/mode$m.png
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-screenshots
+          path: shots/
+      - name: Package
+        run: |
+          d=WSplit-windows-x86_64
+          mkdir -p $d
+          cp native/WSplit.exe native/README.md native/examples/*.wsplit $d/
+          zip -r $d.zip $d
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WSplit-windows-x86_64
+          path: WSplit-windows-x86_64.zip
+
   release:
     name: Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [linux, macos]
+    needs: [linux, macos, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
+          pattern: '[wW][sS]plit-*'
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}

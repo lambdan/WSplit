@@ -87,8 +87,13 @@ int main(void)
     EQD(r.segs[2].best_segment, 8); /* no best segment from a skipped split */
 
     /* file round trip */
-    char path[] = "/tmp/wsplit_test_XXXXXX";
-    int fd = mkstemp(path); close(fd);
+    char path[512];
+    {
+        const char *td = getenv("TEMP"); /* Windows */
+        if (!td || !*td) td = getenv("TMPDIR");
+        if (!td || !*td) td = "/tmp";
+        snprintf(path, sizeof path, "%s/wsplit_test_%ld_%d.wsplit", td, (long)time(NULL), rand());
+    }
     ws_run_set_title(&r, "Super Metroid 100%");
     ws_run_set_goal(&r, "sub 1:20");
     r.attempts = 42; r.start_delay_ms = 1500; r.pref_w = 240; r.pref_h = 60;

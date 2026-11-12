@@ -56,6 +56,22 @@ app: WSplit.app/Contents/MacOS/WSplit
 	codesign --force --deep -s - WSplit.app 2>/dev/null || true
 	@echo "Built WSplit.app"
 
+# ---------------------------------------------------------------- Windows
+# Cross-compile from Linux/macOS with MinGW-w64, or on MSYS2 mingw64 with
+#   make windows WIN_CC=gcc WINDRES=windres
+WIN_CC ?= x86_64-w64-mingw32-gcc
+WINDRES ?= x86_64-w64-mingw32-windres
+WIN_CFLAGS := -O2 -std=c11 -Wall -Wextra -Wno-unused-parameter -Wno-format-truncation -Wno-cast-function-type
+WIN_LIBS := -lgdiplus -lcomdlg32 -lcomctl32 -lshell32 -lole32 -luuid -lm
+
+windows: WSplit.exe
+
+windows/wsplit_res.o: windows/wsplit.rc windows/resource.h windows/wsplit.manifest windows/wsplit.ico assets/digital-7-mono.ttf
+	$(WINDRES) -I windows windows/wsplit.rc -O coff -o $@
+
+WSplit.exe: $(CORE) windows/main.c windows/resource.h core/wsplit.h windows/wsplit_res.o
+	$(WIN_CC) $(WIN_CFLAGS) -municode -mwindows -static $(CORE) windows/main.c windows/wsplit_res.o -o $@ $(WIN_LIBS)
+
 # ---------------------------------------------------------------- tests
 test: tests/test_core
 	./tests/test_core
@@ -64,6 +80,6 @@ tests/test_core: tests/test_core.c $(CORE) core/wsplit.h
 	$(CC) $(CFLAGS) tests/test_core.c $(CORE) -lm -o $@
 
 clean:
-	rm -rf wsplit tests/test_core WSplit.app
+	rm -rf wsplit tests/test_core WSplit.app WSplit.exe windows/wsplit_res.o
 
-.PHONY: all app install test clean
+.PHONY: all app install test clean windows

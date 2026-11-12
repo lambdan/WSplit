@@ -1,0 +1,4 @@
+wsplit
+tests/test_core
+WSplit.app/
+*.o

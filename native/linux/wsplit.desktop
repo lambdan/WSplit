@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=WSplit
+GenericName=Speedrun Timer
+Comment=Split timer for speedrunning (native port of WSplit)
+Exec=wsplit %f
+Icon=wsplit
+Terminal=false
+Categories=Utility;Game;

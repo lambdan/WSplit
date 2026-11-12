@@ -1,13 +1,10 @@
 # CLAUDE.md: WSplit native port
 
-This is **lambdan/WSplit**, David's fork of Nitrofski/WSplit (the classic C# WinForms
-speedrun timer). The fork adds a native C port in `native/`. The original C# code in
-`WSplit/` is untouched reference material.
+100% vibecoded, I don't give a shit.
 
 ## Repo rules (from the owner)
 
 - **Never send anything upstream** (no PRs, issues or pushes to Nitrofski/WSplit). Everything stays on this fork.
-- **Commit and push straight to `master`.** No feature branches, no pull requests.
 - Commit messages end with the attribution trailer lines (Co-Authored-By etc.).
 - The owner uses **Wayland only**. X11 support is being removed (see "In progress").
 

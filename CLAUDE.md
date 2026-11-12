@@ -6,7 +6,7 @@
 
 - **Never send anything upstream** (no PRs, issues or pushes to Nitrofski/WSplit). Everything stays on this fork.
 - Commit messages end with the attribution trailer lines (Co-Authored-By etc.).
-- The owner uses **Wayland only**. X11 support is being removed (see "In progress").
+- The owner uses **Wayland only**. X11 support has been removed (GTK4 front-end).
 
 ## Layout
 
@@ -22,7 +22,7 @@ native/
     app.c       controller = port of the WSplit form logic (split/pause/reset/stop/prompts/layout)
     render.c    the renderer = port of WSplit.Painter (all 4 display modes) via WsPainter callbacks
     menu.c      shared context-menu model; front-ends render it natively, ids >= WS_CMD_CORE_BASE run in core
-  linux/        CURRENT: X11 + cairo front-end (main.c, ui.c, x11.h). TO BE REPLACED by GTK4, see below
+  linux/        GTK 4 front-end (wsplit-gtk.c) + io.github.lambdan.WSplit.desktop
   macos/        AppKit front-end (main.m, Dialogs.m, WSplitMac.h, Info.plist, make_icns.sh)
   windows/      Win32 + GDI+ front-end: resources only so far (wsplit.rc, resource.h, manifest, .ico)
   tests/        test_core.c: 82 core tests (`make test`)
@@ -68,58 +68,39 @@ rendering. Compare against `docs/overview_*.png`.
 | Platform | State |
 |---|---|
 | core | Done, 82 tests pass, ASan/UBSan clean |
-| Linux X11 | Done and tested under Xvfb, **but being dropped** (owner is Wayland-only) |
+| Linux GTK4 | Code complete, screenshot-verified, smoke-tested on macOS GTK. **Not yet tested on Wayland** |
 | macOS | Code complete. Owner ran an early build. CI job has been stuck "queued" (macos-latest); check `gh run list`. Window-drag was "finicky": now moves the window manually in `mouseDragged` (DRAG_MOVE) instead of `performWindowDragWithEvent`. **Ask the owner to confirm the fix.** |
 | Windows | Resources/manifest/icon done; `windows/main.c` **not written yet** |
-| CI | Linux job green. Needs: switch Linux job to GTK4 (ubuntu-24.04), add Windows (MSYS2 mingw64) |
+| CI | Linux job switched to GTK4 on ubuntu-24.04 (+ screenshot smoke test). Needs: Windows (MSYS2 mingw64) |
 
 ## In progress / next steps
 
-### 1. Replace X11 with a GTK4 front-end (Wayland-native)  ← top priority
-Delete `linux/main.c`, `linux/ui.c`, `linux/x11.h`; write e.g. `linux/wsplit-gtk.c`. Requires GTK ≥ 4.10.
-Reuse from the old `linux/main.c`: the whole cairo painter (`p_*` functions, `use_font`, FreeType
-Digital-7 loading via cairo-ft, PNG icon loader with greyscale copy), asset-dir discovery, and the
-`--screenshot` mode.
+### 1. GTK4 front-end (Wayland-native): written, needs a real Wayland test
+`linux/wsplit-gtk.c` replaced the X11 files. Requires GTK ≥ 4.12 (`gtk_css_provider_load_from_string`,
+`gtk_widget_compute_point`). Builds warning-free; the `--screenshot` renders match `docs/`; the window starts
+on macOS with Homebrew gtk4 (`make wsplit` works on macOS for compile/smoke tests, use
+`XDG_CONFIG_HOME=<tmp>` so you don't touch real settings). **Not yet run on Wayland.** Ask the owner to try:
+window move (`gdk_toplevel_begin_move`), clock-edge resize, right-click `GtkPopoverMenu` (nested submenus),
+key latency (`WSPLIT_DEBUG_LATENCY=1` prints it), and the GlobalShortcuts portal flow.
 
-Design decided so far:
-- `GtkApplication` id `io.github.lambdan.WSplit`, `G_APPLICATION_HANDLES_OPEN` (second launch
-  opens the file in the running instance). Rename `linux/wsplit.desktop` → `io.github.lambdan.WSplit.desktop`
-  (portals identify apps by this).
-- Undecorated, non-resizable `GtkWindow` holding a `GtkDrawingArea`. Host resize →
-  `gtk_drawing_area_set_content_width/height` (+ `gtk_window_set_default_size`).
-- Refresh: `g_timeout_add_full(G_PRIORITY_HIGH, refresh_ms, ...)`, re-armed when `refresh_ms` changes.
-- Button 1: `GtkGestureDrag`. On drag-begin, hit-test (same logic as the old `hit_test`).
-  MOVE → `gdk_toplevel_begin_move(...)` + `gtk_event_controller_reset`. Clock-edge/segment drags →
-  handle in drag-update. Left/top edges can't move the window on Wayland, so they just resize.
-- Cursors: `GtkEventControllerMotion` + `gtk_widget_set_cursor_from_name` (ew-resize, ns-resize, nwse-resize, nesw-resize).
-- Right-click menu: `GtkPopoverMenu` from a `GMenu` built from `WsMenu`. Separators start new
-  sections. One `GSimpleAction` per item in a `GSimpleActionGroup` inserted as "ws"; stateful
-  boolean for check/radio items; `g_simple_action_set_enabled` for disabled ones. **Escape `_` as
-  `__` in labels** (mnemonics; recent-file names have underscores). Unparent the popover in an idle after "closed".
-- Keys: `GtkEventControllerKey`. Keep a keydown[] set to drop auto-repeat (GTK4 has no repeat flag).
-  Event time from `gtk_event_controller_get_current_event_time` (compositor ms ≈ CLOCK_MONOTONIC) →
-  latency with the same 0..1000 ms sanity check as the old `x_event_latency_ns`.
-- Synchronous host dialogs (core expects `ask()` to return): `GtkAlertDialog` / `GtkFileDialog` /
-  `GtkFontDialog` with a nested `g_main_context_iteration` loop until the callback fires. The timer
-  keeps ticking because the timeout runs in that loop.
-- Run editor: own modal window with Title/Goal/Attempts/Delay entries + monospace `GtkTextView`
-  using `ws_run_segments_to_text` / `ws_run_segments_from_text`, plus an "Auto-fill best segments"
-  button (`ws_run_autofill_best_segments`). Before opening: `ws_run_update_best`. On cancel:
-  `ws_run_restore_best`. On OK: `ws_app_run_edited`. See macOS `WSShowRunEditor` for the exact flow.
-- Global hotkeys: **xdg-desktop-portal GlobalShortcuts** over GDBus (no extra deps). CreateSession
-  → Response(session_handle) → BindShortcuts(session, a(sa{sv}) [(id, {description, preferred_trigger})], "", {handle_token}).
-  Subscribe to `Activated(o session, s id, t timestamp, a{sv})` → map id → `ws_app_hotkey`.
-  Request object path = `/org/freedesktop/portal/desktop/request/<unique name without ':' and '.'→'_'>/<token>`;
-  subscribe to its Response **before** calling. Bind all 8 ids (the core ignores non-toggle hotkeys
-  while disabled). On settings change: close the session (`org.freedesktop.portal.Session.Close`)
-  and rebind. Trigger format is the XDG shortcuts spec: `CTRL+SHIFT+F1`, mods CTRL/ALT/SHIFT/LOGO,
-  key = xkb keysym name (Space→space, Enter→Return, Numpad1→KP_1, PageUp→Page_Up,
-  Backspace→BackSpace, Minus→minus, Quote→apostrophe, letters lowercase). If the portal is
-  missing, show one message: needs GNOME 48+, KDE Plasma 6 or Hyprland.
-- Opacity: `gtk_widget_set_opacity(window)`. Always-on-top and remember-position are impossible
-  on Wayland (hidden in the menu). Drag & drop: `GtkDropTarget` for `G_TYPE_FILE`.
-- Settings path: `g_get_user_config_dir()/wsplit/settings.ini`.
-- Makefile: `pkg-config gtk4 freetype2`. CI Linux job: ubuntu-24.04, `libgtk-4-dev libfreetype-dev`.
+How it's built (keep consistent when changing):
+- `GtkApplication` `io.github.lambdan.WSplit` + `G_APPLICATION_HANDLES_OPEN`; core is initialised only in the
+  primary instance (after `g_application_register`). Second launch → `open` → prompt-to-save in an idle, then load.
+- Undecorated non-resizable window + `GtkDrawingArea`; host resize sets content size + size request + default size.
+- Refresh: `g_timeout_add_full(G_PRIORITY_HIGH, refresh_ms)`, re-armed from inside `tick` when `refresh_ms` changes.
+- Synchronous dialogs: `GtkAlertDialog`/`GtkFileDialog`/`GtkFontDialog` and small custom modal windows, all
+  waited on with a nested `g_main_context_iteration` loop (`wait_run`, `dlg_run`), with `modal_open` set.
+- Menu: `WsMenu` → `GMenu` (separators = sections, `_` escaped), one `GSimpleAction` per item in group "ws";
+  activation is deferred to an idle (core actions can prompt). Popover unparented in an idle after "closed".
+- Keys: controller on the window; keydown[] drops auto-repeat and is cleared when the window loses focus.
+  Key names use the keyval with no modifiers (`gdk_display_translate_key`), so Shift+1 = "1".
+- Hotkeys: portal on a **private** D-Bus connection so `org.freedesktop.host.portal.Registry.Register` can be the
+  first call. Rebinds (new session, since BindShortcuts is once per session) only when the trigger strings
+  change; enable/disable is handled by the core. Does nothing if no hotkey is set. One warning if the portal is missing.
+  `Activated` timestamp goes through the same 0..1 s latency sanity check (unverified that it's CLOCK_MONOTONIC ms).
+- Run editor: Title/Goal/Attempts/Start delay + monospace text grid, "Auto-fill best segments", "Insert icon path...".
+  Same update_best / restore_best / close_file + keep path + keep detail size flow as macOS.
+- Icons load via `gdk_texture_new_from_filename` (any gdk-pixbuf format). Ctrl+O/S/E/Q shortcuts.
 
 ### 2. Windows front-end (`windows/main.c`, Win32 + GDI+ flat API in C)
 Plan: `WS_POPUP|WS_MINIMIZEBOX|WS_SYSMENU`, double-buffered GDI+ (`GdipCreateFromHDC` on a memory DC),

@@ -13,10 +13,10 @@ C, with a native front-end on each platform:
 
 | | macOS | Linux |
 |---|---|---|
-| UI | Cocoa / AppKit (Objective-C) | X11 + cairo |
-| Global hotkeys | Carbon `RegisterEventHotKey` (no Accessibility permission needed) | `XGrabKey` |
+| UI | Cocoa / AppKit (Objective-C) | GTK 4 + cairo (Wayland-native) |
+| Global hotkeys | Carbon `RegisterEventHotKey` (no Accessibility permission needed) | xdg-desktop-portal GlobalShortcuts |
 | Fonts | CoreText | cairo + FreeType |
-| Run editor | Native table editor | Your text editor (auto-reload on save) |
+| Run editor | Native table editor | Built-in text-grid editor |
 | Settings | Settings window + right-click menu | Right-click menu |
 
 ## What carries over from the original
@@ -75,32 +75,34 @@ Double-clicking `.wsplit` files opens them in WSplit.
 > (`-Wall -Wextra`, ARC), but it has not run on a real Mac yet. If `make`
 > reports an error, paste it back and it'll be a quick fix.
 
-### Linux (X11; XWayland works too)
+### Linux (GTK 4, Wayland)
+
+Needs GTK 4.12 or newer (Ubuntu 24.04, Fedora 39, current Arch and later).
 
 ```sh
 # Debian/Ubuntu
-sudo apt install build-essential pkg-config libx11-dev libcairo2-dev libfreetype-dev
-# Fedora:  sudo dnf install gcc make pkgconf libX11-devel cairo-devel freetype-devel
-# Arch:    sudo pacman -S base-devel libx11 cairo freetype2
+sudo apt install build-essential pkg-config libgtk-4-dev libfreetype-dev
+# Fedora:  sudo dnf install gcc make pkgconf gtk4-devel freetype-devel
+# Arch:    sudo pacman -S base-devel gtk4 freetype2
 
 make
 ./wsplit examples/sm64_16star.wsplit
-sudo make install          # optional: /usr/local/bin/wsplit + desktop entry
+sudo make install          # optional: /usr/local/bin/wsplit + desktop entry + icons
 ```
 
-For a graphical file chooser install `zenity` (GNOME) or `kdialog` (KDE). Without
-either, WSplit asks for the path in a text field.
+Opening a file while WSplit is already running sends it to the open window.
 
-**Editing runs on Linux:** *New/Edit Run* opens the splits file in your default text
-editor (override with `WSPLIT_EDITOR=...`). Save it there and WSplit reloads it
-automatically while the timer isn't running. Times may be written as seconds
-(`83.45`) or `h:mm:ss.ff` (`1:23.45`); WSplit always saves seconds, so Windows
-WSplit can still read the file. Avoid commas in segment names; the format doesn't
-allow them (this is also true of the original).
+**Editing runs on Linux:** *New/Edit Run* opens an editor with one segment per line:
+`Name | Old time | Best time | Best segment | Icon path`. Times may be written as
+seconds (`83.45`) or `h:mm:ss.ff` (`1:23.45`); leave a cell empty for none. WSplit
+always saves seconds, so Windows WSplit can still read the file. Commas in segment
+names are replaced by spaces, because the file format doesn't allow them (this is
+also true of the original).
 
-**Wayland:** WSplit runs through XWayland. Global hotkeys from `XGrabKey` only fire
-while an X11 window has focus, so they won't work over native Wayland games and
-apps. On an X11 session they work everywhere.
+**Global hotkeys** use the desktop's GlobalShortcuts portal (GNOME 48+, KDE Plasma 6,
+Hyprland). The first time you set one, your desktop asks you to confirm or change the
+key. Wayland has no way for an app to stay on top or to place its own window,
+so those two options aren't in the Linux menu.
 
 ## Where things are stored
 
@@ -118,13 +120,13 @@ as `.wscolors` files.
 - Rainbow splits, background images, the "split times" column (these were hidden or
   unfinished in the last Windows build)
 - The Windows "fallback timer" (not needed: the port uses the OS monotonic clock)
-- Linux: a graphical run editor and colour picker (use the text editor / colour scheme files)
+- Linux: a colour picker (use colour scheme files)
 
 ## Project layout
 
 ```
 core/       portable C11: run model, timer, file formats, settings, menu model, renderer
-linux/      X11 + cairo front-end (main.c, ui.c)
+linux/      GTK 4 front-end (wsplit-gtk.c, .desktop file)
 macos/      AppKit front-end (main.m, Dialogs.m, Info.plist)
 assets/     Digital-7 Mono clock font, app icons
 tests/      core unit tests (make test)

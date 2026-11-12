@@ -17,11 +17,12 @@ else
 all: wsplit
 endif
 
-# ---------------------------------------------------------------- Linux
-LINUX_PKGS := x11 cairo freetype2
-wsplit: $(CORE) linux/main.c linux/ui.c linux/x11.h core/wsplit.h
+# ---------------------------------------------------------------- Linux (GTK 4)
+# `make wsplit` also works on macOS with Homebrew gtk4, handy for testing.
+LINUX_PKGS := gtk4 freetype2
+wsplit: $(CORE) linux/wsplit-gtk.c core/wsplit.h
 	$(CC) $(CFLAGS) $(shell pkg-config --cflags $(LINUX_PKGS)) \
-		$(CORE) linux/main.c linux/ui.c -o $@ \
+		$(CORE) linux/wsplit-gtk.c -o $@ \
 		$(shell pkg-config --libs $(LINUX_PKGS)) -lm
 
 install: wsplit
@@ -30,8 +31,13 @@ install: wsplit
 	for s in 016 032 048 128 256 512; do \
 		install -Dm644 assets/icons/icon_$$s.png $(DESTDIR)$(PREFIX)/share/wsplit/icons/icon_$$s.png; \
 	done
-	install -Dm644 assets/icons/icon_256.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/256x256/apps/wsplit.png
-	install -Dm644 linux/wsplit.desktop $(DESTDIR)$(PREFIX)/share/applications/wsplit.desktop
+	for s in 016 032 048 128 256 512; do \
+		n=$$(echo $$s | sed 's/^0*//'); \
+		install -Dm644 assets/icons/icon_$$s.png \
+			$(DESTDIR)$(PREFIX)/share/icons/hicolor/$${n}x$${n}/apps/io.github.lambdan.WSplit.png; \
+	done
+	install -Dm644 linux/io.github.lambdan.WSplit.desktop \
+		$(DESTDIR)$(PREFIX)/share/applications/io.github.lambdan.WSplit.desktop
 
 # ---------------------------------------------------------------- macOS
 MAC_CFLAGS := -O2 -std=gnu11 -Wall -Wno-unused-parameter -Wno-four-char-constants -Wno-deprecated-declarations

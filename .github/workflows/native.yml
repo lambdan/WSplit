@@ -13,20 +13,25 @@ permissions:
 jobs:
   linux:
     name: Linux x86_64
-    runs-on: ubuntu-22.04   # older glibc = runs on more distros
+    runs-on: ubuntu-24.04   # GTK >= 4.12
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libx11-dev libcairo2-dev libfreetype-dev
+        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libgtk-4-dev libfreetype-dev
       - name: Build
         run: make -C native wsplit
       - name: Unit tests
         run: make -C native test
+      - name: Screenshot smoke test
+        run: |
+          for m in 0 1 2 3; do
+            native/wsplit --screenshot shot$m.png --mode $m --simulate 4 native/examples/sm64_16star.wsplit
+          done
       - name: Package
         run: |
           d=wsplit-linux-x86_64
           mkdir -p $d
-          cp native/wsplit native/README.md native/linux/wsplit.desktop $d/
+          cp native/wsplit native/README.md native/linux/io.github.lambdan.WSplit.desktop $d/
           cp -r native/assets $d/
           cp native/examples/*.wsplit $d/
           tar czf $d.tar.gz $d

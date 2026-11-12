@@ -125,6 +125,24 @@ int main(void)
     EQS(t.recent[0], "/a.wsplit"); EQS(t.hotkeys[WS_HK_SPLIT], "Ctrl+Numpad1");
     remove(path);
 
+    /* ---- run editor text grid */
+    {
+        WsRun e; ws_run_init(&e);
+        ws_run_add(&e, "Level 1", 62.5, 60.12, 60.12);
+        ws_run_add(&e, "A|B", 0, 125.4, 61.03);
+        ws_seg_set_icon_path(&e.segs[1], "C:\\icons\\b.png");
+        char *txt = ws_run_segments_to_text(&e);
+        OK(strstr(txt, "Level 1 | 1:02.50 | 1:00.12 | 1:00.12 | \n") != NULL);
+        OK(ws_run_segments_from_text(&e, txt) == 2);
+        EQS(e.segs[1].name, "A|B"); EQD(e.segs[1].best_time, 125.4); EQD(e.segs[1].old_time, 0);
+        EQS(e.segs[1].icon_path, "C:\\icons\\b.png");
+        free(txt);
+        OK(ws_run_segments_from_text(&e, "# hdr\nFirst, part | 90 | 1:30\n\nSecond\n") == 2);
+        EQS(e.segs[0].name, "First  part"); EQD(e.segs[0].old_time, 90); EQD(e.segs[0].best_time, 90);
+        EQS(e.segs[1].name, "Second"); EQD(e.segs[1].best_time, 0);
+        ws_run_free(&e);
+    }
+
     /* ---- timing: event-timestamp back-dating and exact start delay */
     {
         WsHost h = {0};

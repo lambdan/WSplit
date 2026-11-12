@@ -20,6 +20,54 @@ char *ws_strdup(const char *s)
     return p;
 }
 
+#ifdef _WIN32
+static wchar_t *widen(const char *s)
+{
+    int n = MultiByteToWideChar(CP_UTF8, 0, s, -1, NULL, 0);
+    wchar_t *w = malloc((size_t)(n > 0 ? n : 1) * sizeof(wchar_t));
+    if (w) { if (n > 0) MultiByteToWideChar(CP_UTF8, 0, s, -1, w, n); else w[0] = 0; }
+    return w;
+}
+#endif
+
+FILE *ws_fopen(const char *path, const char *mode)
+{
+#ifdef _WIN32
+    wchar_t *wp = widen(path), *wm = widen(mode);
+    FILE *f = (wp && wm) ? _wfopen(wp, wm) : NULL;
+    free(wp);
+    free(wm);
+    return f;
+#else
+    return fopen(path, mode);
+#endif
+}
+
+int ws_replace_file(const char *src, const char *dst)
+{
+#ifdef _WIN32
+    wchar_t *ws = widen(src), *wd = widen(dst);
+    BOOL ok = ws && wd && MoveFileExW(ws, wd, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+    free(ws);
+    free(wd);
+    return ok ? 0 : -1;
+#else
+    return rename(src, dst);
+#endif
+}
+
+int ws_remove(const char *path)
+{
+#ifdef _WIN32
+    wchar_t *w = widen(path);
+    int r = w ? _wremove(w) : -1;
+    free(w);
+    return r;
+#else
+    return remove(path);
+#endif
+}
+
 static void set_str(char **dst, const char *s)
 {
     char *n = ws_strdup(s);

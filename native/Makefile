@@ -8,7 +8,7 @@ UNAME := $(shell uname -s)
 CC ?= cc
 CFLAGS ?= -O2
 CFLAGS += -std=c11 -Wall -Wextra -Wno-unused-parameter -Wno-format-truncation
-CORE := core/run.c core/runfile.c core/settings.c core/app.c core/render.c core/menu.c
+CORE := core/run.c core/runfile.c core/settings.c core/app.c core/render.c core/menu.c core/runtext.c
 PREFIX ?= /usr/local
 
 ifeq ($(UNAME),Darwin)

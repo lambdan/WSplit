@@ -11,7 +11,7 @@
 
 static char *read_all(const char *path, size_t *len_out, size_t max)
 {
-    FILE *f = fopen(path, "rb");
+    FILE *f = ws_fopen(path, "rb");
     if (!f) return NULL;
     struct stat st;
     if (fstat(fileno(f), &st) != 0 || (size_t)st.st_size > max) { fclose(f); return NULL; }
@@ -136,7 +136,7 @@ bool ws_runfile_save(const WsRun *r, const char *path, char *err, size_t errlen)
 {
     char tmp_path[WS_PATH_MAX + 8];
     snprintf(tmp_path, sizeof tmp_path, "%s.tmp", path);
-    FILE *f = fopen(tmp_path, "wb");
+    FILE *f = ws_fopen(tmp_path, "wb");
     if (!f) {
         if (err) snprintf(err, errlen, "Could not write %s: %s", path, strerror(errno));
         return false;
@@ -161,9 +161,9 @@ bool ws_runfile_save(const WsRun *r, const char *path, char *err, size_t errlen)
         fprintf(f, "%s\"%s\"", i ? "," : "", r->segs[i].icon_path ? r->segs[i].icon_path : "");
     }
     fputs("\r\n", f);
-    if (fclose(f) != 0 || rename(tmp_path, path) != 0) {
+    if (fclose(f) != 0 || ws_replace_file(tmp_path, path) != 0) {
         if (err) snprintf(err, errlen, "Could not write %s: %s", path, strerror(errno));
-        remove(tmp_path);
+        ws_remove(tmp_path);
         return false;
     }
     return true;

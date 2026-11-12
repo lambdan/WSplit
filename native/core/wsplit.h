@@ -301,6 +301,10 @@ bool ws_colors_load(WsColors *c, const char *path);
 bool ws_runfile_load(WsRun *r, const char *path);
 /* Writes r to path. Returns false and sets errbuf on failure. */
 bool ws_runfile_save(const WsRun *r, const char *path, char *errbuf, size_t errlen);
+/* Text-grid form used by the Windows/Linux run editors (see runtext.c).
+   to_text returns a malloc'd string; from_text replaces the segments. */
+char *ws_run_segments_to_text(const WsRun *r);
+int ws_run_segments_from_text(WsRun *r, const char *text);
 /* Import a LiveSplit .lss file (subset: segments, PB, best segments). */
 bool ws_runfile_import_lss(WsRun *r, const char *path);
 
@@ -532,7 +536,8 @@ enum {
 };
 
 #define WS_MENU_PLATFORM_MAC 1
-#define WS_MENU_PLATFORM_LINUX 2
+#define WS_MENU_PLATFORM_LINUX 2   /* Wayland: no always-on-top, no window positioning */
+#define WS_MENU_PLATFORM_WINDOWS 3
 
 WsMenu *ws_menu_build(WsApp *a, int platform);
 void ws_menu_free(WsMenu *m);
@@ -544,6 +549,11 @@ void ws_app_colors_changed(WsApp *a);
 
 /* misc */
 char *ws_strdup(const char *s);
+/* UTF-8 path helpers (Windows needs wide-char APIs for non-ASCII paths). */
+#include <stdio.h>
+FILE *ws_fopen(const char *path, const char *mode);
+int ws_replace_file(const char *src, const char *dst); /* atomic rename over dst */
+int ws_remove(const char *path);
 
 #ifdef __cplusplus
 }

@@ -78,7 +78,8 @@ WsMenu *ws_menu_build(WsApp *a, int platform)
     const bool mac = platform == WS_MENU_PLATFORM_MAC;
     WsMenu *m = menu_new();
 
-    act(m, mac ? "New/Edit Run..." : "New/Edit Run (text editor)...", WS_CMD_EDIT_RUN, true);
+    const bool wayland = platform == WS_MENU_PLATFORM_LINUX;
+    act(m, "New/Edit Run...", WS_CMD_EDIT_RUN, true);
     act(m, "Open...", WS_CMD_OPEN, true);
     WsMenu *rec = sub(m, "Open Recent", true);
     if (s->recent_count == 0) {
@@ -106,7 +107,7 @@ WsMenu *ws_menu_build(WsApp *a, int platform)
     if (mac) act(m, "Settings...", WS_CMD_SETTINGS, true);
 
     WsMenu *d = sub(m, "Display", true);
-    chk(d, "Always on Top", C_ON_TOP, s->on_top);
+    if (!wayland) chk(d, "Always on Top", C_ON_TOP, s->on_top);
     chk(d, "Show Run Title", C_SHOW_TITLE, s->show_title);
     chk(d, "Show Run Goal", C_SHOW_GOAL, s->show_goal);
     chk(d, "Show Attempt Count", C_SHOW_ATTEMPTS, s->show_attempts);
@@ -183,7 +184,7 @@ WsMenu *ws_menu_build(WsApp *a, int platform)
 
         WsMenu *opt = sub(m, "Options", true);
         chk(opt, "Reload Previous Run on Start", C_RELOAD_ON_START, s->load_most_recent);
-        chk(opt, "Remember Window Position", C_SAVE_POS, s->save_window_pos);
+        if (!wayland) chk(opt, "Remember Window Position", C_SAVE_POS, s->save_window_pos);
         act(opt, "Run Start Delay...", WS_CMD_START_DELAY, live);
         WsMenu *dt = sub(opt, "Double Tap Prevention", true);
         for (size_t i = 0; i < sizeof doubletap_vals / sizeof doubletap_vals[0]; i++) {

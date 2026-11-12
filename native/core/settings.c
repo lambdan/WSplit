@@ -156,7 +156,7 @@ static void clamp(WsSettings *s)
 
 bool ws_settings_load(WsSettings *s, const char *path)
 {
-    FILE *f = fopen(path, "r");
+    FILE *f = ws_fopen(path, "r");
     if (!f) return false;
     char line[WS_PATH_MAX + 128];
     s->recent_count = 0;
@@ -205,7 +205,7 @@ bool ws_settings_save(const WsSettings *s, const char *path)
 {
     char tmp[WS_PATH_MAX + 8];
     snprintf(tmp, sizeof tmp, "%s.tmp", path);
-    FILE *f = fopen(tmp, "w");
+    FILE *f = ws_fopen(tmp, "w");
     if (!f) return false;
     fputs("# WSplit settings\n[General]\n", f);
     for (size_t i = 0; i < sizeof fields / sizeof fields[0]; i++) {
@@ -225,7 +225,7 @@ bool ws_settings_save(const WsSettings *s, const char *path)
     fputs("\n[Colors]\n", f);
     write_colors(f, &s->colors);
     bool ok = fclose(f) == 0;
-    if (ok) ok = rename(tmp, path) == 0;
+    if (ok) ok = ws_replace_file(tmp, path) == 0;
     return ok;
 }
 
@@ -246,7 +246,7 @@ void ws_settings_clear_recent(WsSettings *s) { s->recent_count = 0; }
 
 bool ws_colors_save(const WsColors *c, const char *path)
 {
-    FILE *f = fopen(path, "w");
+    FILE *f = ws_fopen(path, "w");
     if (!f) return false;
     fputs("# WSplit colour scheme\n[Colors]\n", f);
     write_colors(f, c);
@@ -255,7 +255,7 @@ bool ws_colors_save(const WsColors *c, const char *path)
 
 bool ws_colors_load(WsColors *c, const char *path)
 {
-    FILE *f = fopen(path, "r");
+    FILE *f = ws_fopen(path, "r");
     if (!f) return false;
     char line[512];
     int n = 0;

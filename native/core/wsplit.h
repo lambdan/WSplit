@@ -123,12 +123,20 @@ typedef struct {
     int64_t started_at_ns; /* offset ("Start at...") */
 } WsStopwatch;
 
+/* Monotonic clock in ns: QueryPerformanceCounter on Windows,
+   CLOCK_MONOTONIC elsewhere. */
 int64_t ws_now_ns(void);
 void ws_sw_reset(WsStopwatch *sw);
-void ws_sw_start(WsStopwatch *sw);
-void ws_sw_start_at(WsStopwatch *sw, int64_t offset_ns);
-void ws_sw_stop(WsStopwatch *sw);
-int64_t ws_sw_elapsed_ns(const WsStopwatch *sw);
+/* The *_t variants take the moment the action happened (ws_now_ns base),
+   so a key press can be timed from its event timestamp. */
+void ws_sw_start_t(WsStopwatch *sw, int64_t t);
+void ws_sw_start_at_t(WsStopwatch *sw, int64_t offset_ns, int64_t t);
+void ws_sw_stop_t(WsStopwatch *sw, int64_t t);
+int64_t ws_sw_elapsed_ns_t(const WsStopwatch *sw, int64_t t);
+static inline void ws_sw_start(WsStopwatch *sw) { ws_sw_start_t(sw, ws_now_ns()); }
+static inline void ws_sw_start_at(WsStopwatch *sw, int64_t off) { ws_sw_start_at_t(sw, off, ws_now_ns()); }
+static inline void ws_sw_stop(WsStopwatch *sw) { ws_sw_stop_t(sw, ws_now_ns()); }
+static inline int64_t ws_sw_elapsed_ns(const WsStopwatch *sw) { return ws_sw_elapsed_ns_t(sw, ws_now_ns()); }
 static inline double ws_sw_elapsed_s(const WsStopwatch *sw) { return (double)ws_sw_elapsed_ns(sw) / 1e9; }
 
 /* ------------------------------------------------------------------ */
@@ -404,6 +412,10 @@ typedef struct {
     bool run_losing_time;
 
     bool modal_open;
+
+    /* Timestamp (ws_now_ns base) of the input event being handled, 0 = now.
+       Set with ws_app_set_input_time() right before an action. */
+    int64_t input_ns;
 } WsApp;
 
 /* settings_path: where settings.ini lives. host must be filled. */
@@ -433,6 +445,9 @@ void ws_app_toggle_hotkeys(WsApp *a);
 void ws_app_set_as_old(WsApp *a);
 bool ws_app_start_at(WsApp *a, double seconds, bool use_delay);
 void ws_app_hotkey(WsApp *a, WsHotkeyAction act);
+/* Tell the core that the next action was triggered `latency_ns` ago
+   (from the OS event timestamp). Ignored if outside 0..1 s. */
+void ws_app_set_input_latency(WsApp *a, int64_t latency_ns);
 /* Local (focused) key handling. key is a name as in hotkey strings
    ("Space", "Enter", "Left", "Up", "0", "P", "Tab", ...). Returns true if handled. */
 bool ws_app_local_key(WsApp *a, const char *key);

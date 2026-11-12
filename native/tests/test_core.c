@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 
 static int fails = 0, total = 0;
 #define EQS(got, exp) do { total++; if (strcmp((got), (exp))) { fails++; printf("FAIL %s:%d: got '%s' expected '%s'\n", __FILE__, __LINE__, (got), (exp)); } } while (0)
@@ -123,6 +124,37 @@ int main(void)
     OK(t.display_mode == WS_MODE_WIDE && t.colors.AheadFore == 0xFF112233 && t.recent_count == 2);
     EQS(t.recent[0], "/a.wsplit"); EQS(t.hotkeys[WS_HK_SPLIT], "Ctrl+Numpad1");
     remove(path);
+
+    /* ---- timing: event-timestamp back-dating and exact start delay */
+    {
+        WsHost h = {0};
+        WsApp app; ws_app_init(&app, &h, NULL);
+        ws_run_add(&app.run, "A", 0, 0, 0); ws_run_add(&app.run, "B", 0, 0, 0);
+        app.settings.double_tap_guard_ms = 0;
+        ws_app_initialize_display(&app);
+        ws_app_timer_control(&app);              /* start now */
+        struct timespec ts = {0, 300000000};    /* 300 ms */
+        nanosleep(&ts, NULL);
+        ws_app_set_input_latency(&app, 100000000); /* key was pressed 100 ms ago */
+        ws_app_timer_control(&app);              /* split */
+        double t = app.run.segs[0].live_time;
+        OK(t >= 0.19 && t <= 0.21);              /* ~0.20 s, not ~0.30 s */
+        OK(app.input_ns == 0);
+        ws_app_free(&app);
+
+        ws_app_init(&app, &h, NULL);
+        ws_run_add(&app.run, "A", 0, 0, 0);
+        app.run.start_delay_ms = 50;
+        ws_app_initialize_display(&app);
+        ws_app_pause_resume(&app);               /* begin delay */
+        int64_t d0 = app.delay_start_ns;
+        struct timespec ts2 = {0, 80000000};    /* tick arrives 30 ms after the delay ended */
+        nanosleep(&ts2, NULL);
+        ws_app_tick(&app);
+        OK(!app.delay_active && app.timer.running);
+        OK(app.timer.start_ns == d0 + 50000000LL); /* started exactly at the end of the delay */
+        ws_app_free(&app);
+    }
 
     ws_run_free(&r); ws_run_free(&q);
     printf("%d/%d tests passed\n", total - fails, total);

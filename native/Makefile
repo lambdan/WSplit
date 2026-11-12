@@ -54,8 +54,8 @@ app: WSplit.app/Contents/MacOS/WSplit
 test: tests/test_core
 	./tests/test_core
 
-tests/test_core: tests/test_core.c core/run.c core/runfile.c core/settings.c core/wsplit.h
-	$(CC) $(CFLAGS) tests/test_core.c core/run.c core/runfile.c core/settings.c -lm -o $@
+tests/test_core: tests/test_core.c $(CORE) core/wsplit.h
+	$(CC) $(CFLAGS) tests/test_core.c $(CORE) -lm -o $@
 
 clean:
 	rm -rf wsplit tests/test_core WSplit.app

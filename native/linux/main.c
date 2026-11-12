@@ -450,11 +450,23 @@ static void h_hotkeys_changed(void *ud)
     ui.need_redraw = true;
 }
 
+/* X server timestamps are CLOCK_MONOTONIC milliseconds (Xorg, Xvfb and
+   XWayland use GetTimeInMillis). Turn one into "how long ago". Returns 0 if
+   the server clock doesn't look like ours (e.g. a remote display). */
+static int64_t x_event_latency_ns(Time t)
+{
+    uint32_t now_ms = (uint32_t)(ws_now_ns() / 1000000);
+    int32_t d = (int32_t)(now_ms - (uint32_t)t);
+    if (getenv("WSPLIT_DEBUG_LATENCY")) fprintf(stderr, "key event latency: %d ms\n", d);
+    return (d >= 0 && d < 1000) ? (int64_t)d * 1000000 : 0;
+}
+
 static bool handle_hotkey_event(XKeyEvent *ke)
 {
     unsigned st = ke->state & (ControlMask | Mod1Mask | ShiftMask | Mod4Mask);
     for (int i = 0; i < WS_HK_COUNT; i++) {
         if (ui.grabs[i].grabbed && ui.grabs[i].code == ke->keycode && ui.grabs[i].mods == st) {
+            ws_app_set_input_latency(&ui.app, x_event_latency_ns(ke->time));
             ws_app_hotkey(&ui.app, (WsHotkeyAction)i);
             ui.need_redraw = true;
             return true;
@@ -943,6 +955,7 @@ static void on_key(XKeyEvent *ke, bool press)
         else if ((ke->state & ControlMask) && !strcmp(name, "Q")) cmd_exit();
         return;
     }
+    ws_app_set_input_latency(&ui.app, x_event_latency_ns(ke->time));
     if (ws_app_local_key(&ui.app, name)) ui.need_redraw = true;
 }
 

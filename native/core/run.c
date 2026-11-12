@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 char *ws_strdup(const char *s)
 {
@@ -305,37 +308,52 @@ void ws_run_autofill_best_segments(WsRun *r)
 
 int64_t ws_now_ns(void)
 {
+#ifdef _WIN32
+    static LARGE_INTEGER freq;
+    LARGE_INTEGER c;
+    if (!freq.QuadPart) QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&c);
+    /* split to avoid overflow: whole seconds + remainder */
+    return (int64_t)(c.QuadPart / freq.QuadPart) * 1000000000LL +
+           (int64_t)((c.QuadPart % freq.QuadPart) * 1000000000LL / freq.QuadPart);
+#else
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+#endif
 }
 
 void ws_sw_reset(WsStopwatch *sw) { memset(sw, 0, sizeof *sw); }
 
-void ws_sw_start(WsStopwatch *sw)
+void ws_sw_start_t(WsStopwatch *sw, int64_t t)
 {
     if (sw->running) return;
-    sw->start_ns = ws_now_ns();
+    sw->start_ns = t;
     sw->running = true;
 }
 
-void ws_sw_start_at(WsStopwatch *sw, int64_t offset_ns)
+void ws_sw_start_at_t(WsStopwatch *sw, int64_t offset_ns, int64_t t)
 {
     if (!sw->running && sw->accumulated_ns == 0) sw->started_at_ns = offset_ns;
-    ws_sw_start(sw);
+    ws_sw_start_t(sw, t);
 }
 
-void ws_sw_stop(WsStopwatch *sw)
+void ws_sw_stop_t(WsStopwatch *sw, int64_t t)
 {
     if (!sw->running) return;
-    sw->accumulated_ns += ws_now_ns() - sw->start_ns;
+    int64_t d = t - sw->start_ns;
+    sw->accumulated_ns += d > 0 ? d : 0;
     sw->running = false;
 }
 
-int64_t ws_sw_elapsed_ns(const WsStopwatch *sw)
+int64_t ws_sw_elapsed_ns_t(const WsStopwatch *sw, int64_t t)
 {
     int64_t e = sw->accumulated_ns;
-    if (sw->running) e += ws_now_ns() - sw->start_ns;
+    if (sw->running) {
+        int64_t d = t - sw->start_ns;
+        e += d > 0 ? d : 0;
+        if (e == 0) e = 1; /* started: never report "not started" */
+    }
     if (e == 0 && !sw->running) return 0; /* not started: ElapsedTicks == 0 */
     return e + sw->started_at_ns;
 }

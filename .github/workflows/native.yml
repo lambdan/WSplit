@@ -1,0 +1,69 @@
+name: Native builds
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+    paths: ['native/**', '.github/workflows/native.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    name: Linux x86_64
+    runs-on: ubuntu-22.04   # older glibc = runs on more distros
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libx11-dev libcairo2-dev libfreetype-dev
+      - name: Build
+        run: make -C native wsplit
+      - name: Unit tests
+        run: make -C native test
+      - name: Package
+        run: |
+          d=wsplit-linux-x86_64
+          mkdir -p $d
+          cp native/wsplit native/README.md native/linux/wsplit.desktop $d/
+          cp -r native/assets $d/
+          cp native/examples/*.wsplit $d/
+          tar czf $d.tar.gz $d
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wsplit-linux-x86_64
+          path: wsplit-linux-x86_64.tar.gz
+
+  macos:
+    name: macOS universal
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build WSplit.app
+        run: make -C native app
+      - name: Unit tests
+        run: make -C native test
+      - name: Package (unsigned, ad-hoc)
+        run: |
+          cd native
+          ditto -c -k --keepParent WSplit.app ../WSplit-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WSplit-macOS
+          path: WSplit-macOS.zip
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "WSplit native $GITHUB_REF_NAME" --generate-notes

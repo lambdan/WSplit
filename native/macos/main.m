@@ -387,10 +387,8 @@ enum { DRAG_NONE, DRAG_MOVE, DRAG_CLOCK, DRAG_DETAIL_SEGS, DRAG_WIDE_SEGS, DRAG_
     _startFrame = self.window.frame;
     _ref = _drag == DRAG_DETAIL_SEGS ? (int)p.y : (int)p.x;
     _startVal = gApp.settings.wide_seg_width;
-    if (_drag == DRAG_MOVE) {
-        [self.window performWindowDragWithEvent:e];
-        _drag = DRAG_NONE;
-    }
+    /* DRAG_MOVE is handled in mouseDragged by moving the window ourselves:
+       performWindowDragWithEvent proved unreliable on this borderless window. */
 }
 
 - (void)mouseDragged:(NSEvent *)e
@@ -401,6 +399,11 @@ enum { DRAG_NONE, DRAG_MOVE, DRAG_CLOCK, DRAG_DETAIL_SEGS, DRAG_WIDE_SEGS, DRAG_
     int dy = (int)lround(_startMouse.y - m.y); /* positive = down */
     NSPoint p = [self convertPoint:e.locationInWindow fromView:nil];
     switch (_drag) {
+    case DRAG_MOVE: {
+        NSPoint o = NSMakePoint(_startFrame.origin.x + (m.x - _startMouse.x), _startFrame.origin.y + (m.y - _startMouse.y));
+        [self.window setFrameOrigin:o];
+        return; /* no redraw needed */
+    }
     case DRAG_CLOCK: {
         int w = (int)_startFrame.size.width, h = (int)_startFrame.size.height;
         if (_edges & EDGE_R) w += dx;
@@ -467,6 +470,7 @@ enum { DRAG_NONE, DRAG_MOVE, DRAG_CLOCK, DRAG_DETAIL_SEGS, DRAG_WIDE_SEGS, DRAG_
     const char *name = WSKeyNameForKeyCode(e.keyCode);
     NSEventModifierFlags f = e.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagControl | NSEventModifierFlagOption);
     if (!name || f) { [super keyDown:e]; return; }
+    ws_app_set_input_latency(&gApp, (int64_t)(([[NSProcessInfo processInfo] systemUptime] - e.timestamp) * 1e9));
     if (ws_app_local_key(&gApp, name)) [self setNeedsDisplay:YES];
     else [super keyDown:e];
 }
@@ -532,6 +536,8 @@ static OSStatus HotkeyHandler(EventHandlerCallRef next, EventRef ev, void *ud)
     if (GetEventParameter(ev, kEventParamDirectObject, typeEventHotKeyID, NULL, sizeof hkid, NULL, &hkid) != noErr)
         return eventNotHandledErr;
     if (hkid.signature != 'WSpl' || hkid.id >= WS_HK_COUNT) return eventNotHandledErr;
+    /* both are seconds since boot: how long ago was the key actually pressed? */
+    ws_app_set_input_latency(&gApp, (int64_t)((GetCurrentEventTime() - GetEventTime(ev)) * 1e9));
     ws_app_hotkey(&gApp, (WsHotkeyAction)hkid.id);
     [gDelegate.view setNeedsDisplay:YES];
     return noErr;

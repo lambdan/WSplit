@@ -31,6 +31,20 @@ static void notify_recent(WsApp *a)
     if (a->host.recent_changed) a->host.recent_changed(a->host.ud);
 }
 
+/* Moment of the input being handled (event timestamp), consumed by the action. */
+static int64_t input_time(WsApp *a)
+{
+    int64_t now = ws_now_ns();
+    int64_t t = a->input_ns;
+    if (t <= 0 || t > now || now - t > 1000000000LL) t = now;
+    return t;
+}
+
+void ws_app_set_input_latency(WsApp *a, int64_t latency_ns)
+{
+    a->input_ns = (latency_ns > 0 && latency_ns < 1000000000LL) ? ws_now_ns() - latency_ns : 0;
+}
+
 bool ws_app_started(const WsApp *a) { return ws_sw_elapsed_ns(&a->timer) != 0; }
 bool ws_app_timer_running(const WsApp *a) { return a->timer.running; }
 
@@ -446,42 +460,44 @@ void ws_app_run_edited(WsApp *a)
 
 /* ----------------------------------------------------------- timer */
 
-static void start_timer(WsApp *a, int64_t offset_ns, bool use_delay)
+static void start_timer(WsApp *a, int64_t offset_ns, bool use_delay, int64_t t)
 {
     if (a->delay_active) return;
     if (use_delay && a->run.start_delay_ms > 0) {
         a->delay_active = true;
-        a->delay_start_ns = ws_now_ns();
+        a->delay_start_ns = t;
         a->delay_offset_ns = offset_ns;
     } else {
         if (ws_run_live(&a->run)) a->run.attempts++;
-        ws_sw_start_at(&a->timer, offset_ns);
+        ws_sw_start_at_t(&a->timer, offset_ns, t);
     }
     invalidate(a);
 }
 
 void ws_app_pause_resume(WsApp *a)
 {
+    int64_t t = input_time(a);
+    a->input_ns = 0;
     if (a->refreshing) {
         a->refreshing = false;
         if (a->delay_active) ws_app_initialize_display(a);
-        ws_sw_stop(&a->timer);
+        ws_sw_stop_t(&a->timer, t);
         invalidate(a);
     } else if (!ws_run_done(&a->run) && !a->delay_active) {
         if (!ws_app_started(a)) {
             if (!a->timer.running) ws_app_initialize_display(a);
-            start_timer(a, 0, true);
+            start_timer(a, 0, true, t);
         } else {
-            ws_sw_start(&a->timer);
+            ws_sw_start_t(&a->timer, t);
         }
         a->refreshing = true;
         invalidate(a);
     }
 }
 
-static void do_split(WsApp *a)
+static void do_split(WsApp *a, int64_t at)
 {
-    double t = trunc(ws_sw_elapsed_s(&a->timer) * 100.0) / 100.0;
+    double t = trunc((double)ws_sw_elapsed_ns_t(&a->timer, at) / 1e9 * 100.0) / 100.0;
     ws_run_do_split(&a->run, t);
     if (ws_run_done(&a->run)) a->refreshing = false;
     ws_app_update_display(a);
@@ -498,14 +514,14 @@ void ws_app_stop(WsApp *a)
 
 void ws_app_timer_control(WsApp *a)
 {
-    int64_t now = ws_now_ns();
+    int64_t now = input_time(a); /* keep input_ns for pause_resume below */
     if (a->settings.double_tap_guard_ms > 0 && a->last_tap_ns &&
         now - a->last_tap_ns < (int64_t)a->settings.double_tap_guard_ms * 1000000LL)
         return;
     a->last_tap_ns = now;
 
     if (ws_run_live(&a->run)) {
-        if (a->refreshing && !a->delay_active) do_split(a);
+        if (a->refreshing && !a->delay_active) { a->input_ns = 0; do_split(a, now); }
         else if (ws_run_done(&a->run)) ws_app_stop(a);
         else ws_app_pause_resume(a);
     } else {
@@ -577,7 +593,7 @@ bool ws_app_start_at(WsApp *a, double seconds, bool use_delay)
     if (ws_run_done(&a->run) || a->delay_active) return false;
     if (ws_app_started(a)) return false; /* paused */
     ws_app_initialize_display(a);
-    start_timer(a, (int64_t)llround(seconds * 1e9), use_delay);
+    start_timer(a, (int64_t)llround(seconds * 1e9), use_delay, ws_now_ns());
     a->refreshing = true;
     return true;
 }
@@ -597,6 +613,7 @@ void ws_app_hotkey(WsApp *a, WsHotkeyAction act)
     case WS_HK_TOGGLE: ws_app_toggle_hotkeys(a); break;
     default: break;
     }
+    a->input_ns = 0;
 }
 
 bool ws_app_local_key(WsApp *a, const char *k)
@@ -615,7 +632,8 @@ bool ws_app_local_key(WsApp *a, const char *k)
     else if (!strcasecmp(k, "R")) ws_app_reset(a);
     else if (!strcasecmp(k, "S")) ws_app_stop(a);
     else if (!strcasecmp(k, "Tab")) ws_app_switch_comparison(a);
-    else return false;
+    else { a->input_ns = 0; return false; }
+    a->input_ns = 0;
     return true;
 }
 
@@ -623,10 +641,13 @@ bool ws_app_tick(WsApp *a)
 {
     if (a->delay_active) {
         int64_t now = ws_now_ns();
-        if (now - a->delay_start_ns >= (int64_t)a->run.start_delay_ms * 1000000LL) {
+        int64_t end = a->delay_start_ns + (int64_t)a->run.start_delay_ms * 1000000LL;
+        if (now >= end) {
             a->delay_active = false;
             a->run.attempts++;
-            ws_sw_start_at(&a->timer, a->delay_offset_ns);
+            /* back-date to the exact end of the delay (the tick may be up to one
+               refresh interval late; the original WSplit lost that time) */
+            ws_sw_start_at_t(&a->timer, a->delay_offset_ns, end);
             ws_app_update_display(a);
         }
         return true;
